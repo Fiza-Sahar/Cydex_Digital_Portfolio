@@ -1,0 +1,25 @@
+{
+  "name": "cydex-digital-portfolio",
+  "version": "1.0.0",
+  "description": "Cydex Digital — Full-Stack MERN Platform & Digital Agency Website",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd Server && npm run dev",
+    "dev:client": "cd Client && npm run dev",
+    "build:client": "cd Client && npm run build",
+    "seed": "cd Server && npm run seed",
+    "test:api": "cd Server && npm test",
+    "create-admin": "cd Server && npm run create-admin"
+  },
+  "keywords": [
+    "mern",
+    "react",
+    "nodejs",
+    "mongodb",
+    "express",
+    "portfolio",
+    "cydex-digital"
+  ],
+  "author": "Cydex Digital",
+  "license": "ISC"
+}

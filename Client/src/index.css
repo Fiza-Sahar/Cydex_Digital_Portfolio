@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@theme {
+  /* CYDEX DIGITAL Official Dark Palette */
+  --color-studio-bg: #06161B;
+  --color-studio-surface: #08181F;
+  --color-studio-surface-hover: #0A1F26;
+  --color-studio-surface-dark: #040E12;
+  --color-studio-border: #143542;
+  --color-studio-border-hover: #1D4A5C;
+  --color-studio-text: #FFFFFF;
+  --color-studio-text-secondary: #E5E7E7;
+  --color-studio-text-muted: #9CA3AF;
+  --color-studio-accent: #0AE3DA;
+  --color-studio-accent-secondary: #03A094;
+
+  /* Aliases matching existing classes for backwards safety */
+  --color-cydex-dark: #06161B;
+  --color-cydex-darker: #040E12;
+  --color-cydex-card: #08181F;
+  --color-cydex-card-hover: #0A1F26;
+  --color-cydex-border: #143542;
+  --color-cydex-turquoise: #0AE3DA;
+  --color-cydex-teal: #03A094;
+  --color-cydex-offwhite: #E5E7E7;
+
+  --color-dark-navy: #06161B;
+  --color-turquoise: #0AE3DA;
+  --color-teal: #03A094;
+  --color-off-white: #E5E7E7;
+  --color-navy-card: #08181F;
+  --color-navy-border: #143542;
+
+  /* Clean editorial typography */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Instrument Serif', 'Newsreader', Georgia, serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  --bg-color: #06161B;
+  --surface-color: #08181F;
+  --surface-hover: #0A1F26;
+  --dark-surface: #040E12;
+  --border-color: #143542;
+  --border-color-hover: #1D4A5C;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E5E7E7;
+  --text-muted: #9CA3AF;
+  --accent-color: #0AE3DA;
+  --accent-secondary: #03A094;
+}
+
+/* ─── Global Reset & Clean Foundation ─── */
+html {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Max reading width for editorial body copy */
+.max-w-prose {
+  max-width: 65ch;
+}
+
+/* Clean minimal card */
+.studio-card {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.studio-card:hover {
+  border-color: var(--border-color-hover);
+}
+
+/* Clean, flat glass-panel replacement */
+.glass-panel,
+.glass-panel-interactive {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.glass-panel-interactive:hover {
+  border-color: var(--border-color-hover);
+}
+
+/* Section dividers - clean 1px borders */
+.section-border-t {
+  border-top: 1px solid var(--border-color);
+}
+
+.section-border-b {
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Editorial Serif Headings: restrained accent without glow */
+.editorial-title {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.editorial-title em,
+.editorial-title .accent-word {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent-color);
+  text-shadow: none;
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Single allowed scroll reveal motion: subtle 16px fade-up, 0.5s once */
+@keyframes studioFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: studioFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

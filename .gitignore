@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.lock
+Server/data/db/
+Server/uploads/
+.DS_Store
+Thumbs.db
