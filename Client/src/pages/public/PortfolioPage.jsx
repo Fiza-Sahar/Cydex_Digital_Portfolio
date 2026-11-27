@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { publicService } from '../../services/publicService';
 import { Button } from '../../components/common/Button';
 import { Search, ArrowRight, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Active public categories ('UI/UX and Design' temporarily removed until projects in this category are available)
 const CATEGORIES = [
   'All',
   'Websites',
@@ -15,7 +15,6 @@ const CATEGORIES = [
 export const PortfolioPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawCategory = searchParams.get('category') || 'All';
-  // Fall back cleanly to 'All' if a removed or unsupported category is present in query params
   const currentCategory = CATEGORIES.includes(rawCategory) ? rawCategory : 'All';
   const currentSearch = searchParams.get('search') || '';
   const currentPage = parseInt(searchParams.get('page') || '1', 10);
@@ -25,7 +24,6 @@ export const PortfolioPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(currentSearch);
 
-  // Normalize query param if an invalid or removed category was requested
   useEffect(() => {
     if (rawCategory && !CATEGORIES.includes(rawCategory)) {
       const params = new URLSearchParams(searchParams);
@@ -36,23 +34,49 @@ export const PortfolioPage = () => {
   }, [rawCategory, searchParams, setSearchParams]);
 
   useEffect(() => {
+    let isMounted = true;
     document.title = 'Portfolio — CYDEX DIGITAL';
     setLoading(true);
+
+    const queryParams = {
+      page: currentPage,
+      limit: 9,
+    };
+    if (currentCategory && currentCategory !== 'All') {
+      queryParams.category = currentCategory;
+    }
+    if (currentSearch.trim()) {
+      queryParams.search = currentSearch.trim();
+    }
+
     publicService
-      .getPortfolio({
-        category: currentCategory,
-        search: currentSearch,
-        page: currentPage,
-        limit: 9,
-      })
+      .getPortfolio(queryParams)
       .then((res) => {
-        if (res.success) {
-          setProjects(res.data || []);
-          setTotalPages(res.totalPages || 1);
+        if (!isMounted) return;
+        const payload = res?.data && Array.isArray(res.data) ? res : res?.data;
+        if (payload?.success && Array.isArray(payload.data)) {
+          setProjects(payload.data);
+          setTotalPages(payload.totalPages || 1);
+        } else if (Array.isArray(res)) {
+          setProjects(res);
+          setTotalPages(1);
+        } else {
+          setProjects([]);
+          setTotalPages(1);
         }
       })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error('Failed to load portfolio:', err);
+        setProjects([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentCategory, currentSearch, currentPage]);
 
   const updateParam = (key, value) => {
@@ -73,7 +97,6 @@ export const PortfolioPage = () => {
 
   return (
     <div className="bg-[var(--bg-color)] text-[var(--text-primary)] selection:bg-[#0AE3DA] selection:text-[#0B1215]">
-      {/* 1. Header */}
       <section className="pt-7 pb-12 sm:pt-20 sm:pb-24 lg:pt-28 lg:pb-32 border-b border-[var(--border-color)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl space-y-4 sm:space-y-6 animate-fade-up">
@@ -90,11 +113,9 @@ export const PortfolioPage = () => {
         </div>
       </section>
 
-      {/* 2. Controls & Filter Bar */}
       <section className="py-5 sm:py-8 border-b border-[var(--border-color)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5 sm:gap-4">
-            {/* Category tabs */}
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               {CATEGORIES.map((cat) => (
                 <button
@@ -111,7 +132,6 @@ export const PortfolioPage = () => {
               ))}
             </div>
 
-            {/* Search Input */}
             <form onSubmit={handleSearchSubmit} className="relative sm:w-64">
               <input
                 type="text"
@@ -132,10 +152,15 @@ export const PortfolioPage = () => {
         </div>
       </section>
 
-      {/* 3. Projects Grid or Clean Empty State */}
       <section className="py-10 sm:py-16 lg:py-24 border-b border-[var(--border-color)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {projects.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="studio-card p-6 h-72 animate-pulse bg-[var(--surface-color)]" />
+              ))}
+            </div>
+          ) : projects.length === 0 ? (
             <div className="studio-card p-12 sm:p-16 text-center space-y-4 max-w-2xl mx-auto">
               <h2 className="text-xl font-semibold text-[var(--text-primary)]">
                 {currentSearch || currentCategory !== 'All'
@@ -196,7 +221,7 @@ export const PortfolioPage = () => {
                       <p className="text-sm text-[var(--text-muted)] leading-relaxed">
                         {item.shortDescription || item.summary || item.description}
                       </p>
-                      {item.technologies && item.technologies.length > 0 && (
+                      {Array.isArray(item.technologies) && item.technologies.length > 0 && (
                         <div className="pt-2 flex flex-wrap gap-1.5">
                           {item.technologies.map((tag, tIdx) => (
                             <span
@@ -211,7 +236,7 @@ export const PortfolioPage = () => {
                     </div>
                   </div>
 
-                  <div className="p-6 pt-0 flex items-center justify-between border-t border-[var(--border-color)] mt-4 pt-4">
+                  <div className="p-6 pt-4 flex items-center justify-between border-t border-[var(--border-color)] mt-4">
                     <Link
                       to={`/portfolio/${item.slug || item._id}`}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0AE3DA] hover:text-[var(--text-primary)] uppercase tracking-wider transition-colors"
@@ -236,7 +261,6 @@ export const PortfolioPage = () => {
             </div>
           )}
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="mt-12 flex items-center justify-center gap-2">
               <button
@@ -261,7 +285,6 @@ export const PortfolioPage = () => {
         </div>
       </section>
 
-      {/* 4. Final CTA */}
       <section className="py-24 sm:py-32">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
           <h2 className="editorial-title text-4xl sm:text-5xl lg:text-6xl font-normal text-[var(--text-primary)]">
