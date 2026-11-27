@@ -1,9 +1,13 @@
+
 {
   "name": "server",
   "version": "1.0.0",
   "description": "Cydex Digital Backend API",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
