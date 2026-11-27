@@ -1,8 +1,8 @@
-
 import dns from 'dns';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import app from './app.js';
 
 // ======================================
 // 1. Load Environment Variables
@@ -19,9 +19,7 @@ dotenv.config({
 // 2. Local DNS Configuration
 // ======================================
 
-// Only apply custom DNS settings locally.
-// Do not override DNS settings on Vercel.
-
+// Only apply custom DNS settings locally. Do not override DNS settings on Vercel.
 if (!process.env.VERCEL) {
   try {
     dns.setServers(['8.8.8.8', '1.1.1.1']);
@@ -31,29 +29,16 @@ if (!process.env.VERCEL) {
 }
 
 // ======================================
-// 3. Import App After Loading .env
+// 3. Local Development Server
+// Wrap app.listen() so Vercel serverless doesn't attempt to open a port
 // ======================================
 
-const { default: app } = await import('./app.js');
-
-// ======================================
-// 4. Local Development Server
-// ======================================
-
-if (!process.env.VERCEL) {
-
-  const { verifySmtpConfig } = await import(
-    './services/emailService.js'
-  );
-
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 5001;
 
   const startServer = async () => {
     try {
-
-      // Start Express Server
       const server = app.listen(PORT, () => {
-
         console.log('===============================================');
         console.log('       CYDEX DIGITAL API SERVER');
         console.log('===============================================');
@@ -62,40 +47,40 @@ if (!process.env.VERCEL) {
         console.log(`API URL: http://localhost:${PORT}/api/v1`);
         console.log(`Health: http://localhost:${PORT}/api/v1/health`);
         console.log('===============================================');
-
       });
 
-      // SMTP Verification (Local Only)
-      verifySmtpConfig()
-        .then((smtp) => {
+      // Optional SMTP check in local dev
+      try {
+        const { verifySmtpConfig } = await import('./services/emailService.js');
+        verifySmtpConfig()
+          .then((smtp) => {
+            if (smtp.verified) {
+              console.log(`[SMTP] Gmail authenticated: ${smtp.user}`);
+            } else {
+              console.warn(`[SMTP] ${smtp.message}`);
+            }
+          })
+          .catch((error) => {
+            console.warn('[SMTP] Verification notice:', error.message);
+          });
+      } catch (err) {
+        // Ignore if email service config is not present
+      }
 
-          if (smtp.verified) {
-            console.log(`[SMTP] Gmail authenticated: ${smtp.user}`);
-          } else {
-            console.warn(`[SMTP] ${smtp.message}`);
-          }
-
-        })
-        .catch((error) => {
-          console.warn('[SMTP] Verification error:', error.message);
-        });
-
-      // Server Error Handling
       server.on('error', (error) => {
         console.error('[SERVER ERROR]:', error.message);
       });
-
     } catch (error) {
       console.error('[STARTUP ERROR]:', error);
     }
   };
 
   startServer();
-
 }
 
 // ======================================
-// 5. Export Express App for Vercel
+// 4. Export Express App for Vercel
 // ======================================
 
 export default app;
+export { app };

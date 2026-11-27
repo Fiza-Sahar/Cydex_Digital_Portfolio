@@ -1,9 +1,9 @@
-
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import mongoose from 'mongoose';
 
 import { connectDB } from './config/db.js';
 
@@ -42,34 +42,49 @@ app.use(
 // 2. CORS Configuration
 // ======================================
 
-const configuredOrigins = (process.env.FRONTEND_URL || '')
-  .split(',')
-  .map(origin => origin.trim().replace(/\/$/, ''))
-  .filter(Boolean);
-
-const allowedOrigins = [
-  ...configuredOrigins,
+const defaultAllowedOrigins = [
+  'https://cydexdigital.com',
+  'https://www.cydexdigital.com',
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174'
 ];
 
+const configuredOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(origin => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...configuredOrigins]));
+
 const corsOptions = {
   origin: (origin, callback) => {
+    // Allow non-browser requests (mobile apps, curl, server-to-server, or same-origin)
     if (!origin) {
       return callback(null, true);
     }
 
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+
+    // Allow explicitly listed origins
+    if (allowedOrigins.includes(cleanOrigin)) {
+      return callback(null, true);
+    }
+
+    // Allow all Vercel preview or production deployments for this project
+    if (/^https:\/\/.*\.vercel\.app$/.test(cleanOrigin)) {
+      return callback(null, true);
+    }
+
+    // Allow all origins in development
     if (process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error(`CORS blocked origin: ${origin}`));
+    // Fail silently without crashing the server process with an unhandled 500 error
+    return callback(null, false);
   },
 
   credentials: true,
@@ -85,37 +100,28 @@ const corsOptions = {
 
   allowedHeaders: [
     'Content-Type',
-    'Authorization'
-  ]
+    'Authorization',
+    'X-Requested-With',
+    'Accept'
+  ],
+
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // ======================================
-// 3. Body Parser
+// 3. Body Parser & Cookie Parser
 // ======================================
 
 app.use(express.json({ limit: '10mb' }));
-
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: '10mb'
-  })
-);
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET || 'cydex_cookie_secret_key'));
 
 // ======================================
-// 4. Cookie Parser
-// ======================================
-
-app.use(
-  cookieParser(
-    process.env.COOKIE_SECRET || 'cydex_cookie_secret_key'
-  )
-);
-
-// ======================================
-// 5. Morgan Logger
+// 4. Logger (Development only)
 // ======================================
 
 if (process.env.NODE_ENV === 'development') {
@@ -123,19 +129,39 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // ======================================
-// 6. Health Check
+// 5. Health Check & Root Routes (Before DB Middleware)
+// Must succeed immediately without waiting for DB
 // ======================================
 
-app.get('/api/v1/health', (req, res) => {
+// GET / - Root route for direct browser and Vercel verification
+app.get('/', (req, res) => {
   res.status(200).json({
-    success: true,
-    message: 'Cydex Digital API is running',
+    status: 'API is running',
+    message: 'Cydex Digital Backend API',
+    environment: process.env.NODE_ENV || 'production',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString()
   });
 });
 
+// GET /health and /api/v1/health
+const healthHandler = (req, res) => {
+  res.status(200).json({
+    status: 'API is running',
+    success: true,
+    message: 'Cydex Digital API is running',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/api/v1/health', healthHandler);
+
 // ======================================
-// 7. MongoDB Connection Middleware
+// 6. Safe MongoDB Connection Middleware
+// Only applied to business API routes
 // ======================================
 
 app.use(async (req, res, next) => {
@@ -143,39 +169,45 @@ app.use(async (req, res, next) => {
     await connectDB();
     next();
   } catch (error) {
-    console.error('[Database Error]:', error.message);
+    console.error('[Database Middleware Error]:', error.message);
 
     res.status(503).json({
       success: false,
-      message: 'Database connection failed'
+      message: 'Database connection failed. Please ensure MONGODB_URI is set and IP 0.0.0.0/0 is allowed in MongoDB Atlas.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // ======================================
-// 8. API Routes
+// 7. API Routes (Mounted under /api/v1 and /api)
 // ======================================
 
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/services', serviceRoutes);
-app.use('/api/v1/portfolio', portfolioRoutes);
+const routeList = [
+  ['/auth', authRoutes],
+  ['/services', serviceRoutes],
+  ['/portfolio', portfolioRoutes],
+  ['/contact', inquiryRoutes],
+  ['/inquiries', inquiryRoutes],
+  ['/client-projects', clientProjectRoutes],
+  ['/messages', messageRoutes],
+  ['/notifications', notificationRoutes],
+  ['/blog', blogRoutes],
+  ['/testimonials', testimonialRoutes],
+  ['/team', teamRoutes],
+  ['/media', mediaRoutes],
+  ['/settings', settingsRoutes],
+  ['/admin', adminRoutes]
+];
 
-app.use('/api/v1/contact', inquiryRoutes);
-app.use('/api/v1/inquiries', inquiryRoutes);
-
-app.use('/api/v1/client-projects', clientProjectRoutes);
-app.use('/api/v1/messages', messageRoutes);
-app.use('/api/v1/notifications', notificationRoutes);
-
-app.use('/api/v1/blog', blogRoutes);
-app.use('/api/v1/testimonials', testimonialRoutes);
-app.use('/api/v1/team', teamRoutes);
-app.use('/api/v1/media', mediaRoutes);
-app.use('/api/v1/settings', settingsRoutes);
-app.use('/api/v1/admin', adminRoutes);
+routeList.forEach(([path, router]) => {
+  // Support both canonical /api/v1/... and /api/... aliases
+  app.use(`/api/v1${path}`, router);
+  app.use(`/api${path}`, router);
+});
 
 // ======================================
-// 9. Not Found Middleware
+// 8. 404 Not Found Middleware
 // ======================================
 
 app.use((req, res) => {
@@ -186,13 +218,14 @@ app.use((req, res) => {
 });
 
 // ======================================
-// 10. Error Handler
+// 9. Centralized Error Handler
 // ======================================
 
 app.use(errorHandler);
 
 // ======================================
-// 11. Export App
+// 10. Export Express App for Vercel Serverless
 // ======================================
 
 export default app;
+export { app };

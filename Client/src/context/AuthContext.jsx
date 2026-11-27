@@ -29,6 +29,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     const res = await authService.login(credentials);
     if (res.success && res.data?.user) {
+      if (res.token) {
+        try {
+          localStorage.setItem('cydex_token', res.token);
+        } catch (e) {}
+      }
       setUser(res.data.user);
     }
     return res;
@@ -37,6 +42,11 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     const res = await authService.register(userData);
     if (res.success && res.data?.user) {
+      if (res.token) {
+        try {
+          localStorage.setItem('cydex_token', res.token);
+        } catch (e) {}
+      }
       setUser(res.data.user);
     }
     return res;
@@ -48,6 +58,9 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
+      try {
+        localStorage.removeItem('cydex_token');
+      } catch (e) {}
       setUser(null);
     }
   };

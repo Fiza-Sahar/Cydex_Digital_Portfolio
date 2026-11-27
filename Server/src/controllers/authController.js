@@ -15,11 +15,13 @@ const generateToken = (user) => {
 const sendTokenResponse = (user, statusCode, res) => {
   const token = generateToken(user);
 
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   const cookieOptions = {
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.COOKIE_SAMESITE || (process.env.NODE_ENV === 'production' ? 'strict' : 'lax'),
+    secure: isProd,
+    sameSite: process.env.COOKIE_SAMESITE || (isProd ? 'none' : 'lax'),
+    path: '/',
   };
 
   res.cookie('cydex_token', token, cookieOptions);
@@ -180,14 +182,17 @@ export const login = async (req, res, next) => {
 // @route   POST /api/v1/auth/logout
 // @access  Public
 export const logout = async (req, res) => {
-  res.cookie('cydex_token', 'none', {
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  const cookieOptions = {
     expires: new Date(0),
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.COOKIE_SAMESITE || (isProd ? 'none' : 'lax'),
+    secure: isProd,
     path: '/',
-  });
-  res.clearCookie('cydex_token', { path: '/' });
+  };
+
+  res.cookie('cydex_token', '', cookieOptions);
+  res.clearCookie('cydex_token', cookieOptions);
 
   res.status(200).json({
     success: true,
