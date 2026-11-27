@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -6,6 +7,9 @@ import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { connectDB } from './config/db.js';
+
+// Import Routes
 import authRoutes from './routes/authRoutes.js';
 import serviceRoutes from './routes/serviceRoutes.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
@@ -19,6 +23,7 @@ import teamRoutes from './routes/teamRoutes.js';
 import mediaRoutes from './routes/mediaRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+
 import { errorHandler } from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -26,111 +31,200 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Security Headers
+// ======================================
+// 1. Security Middleware
+// ======================================
+
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginResourcePolicy: {
+      policy: 'cross-origin'
+    }
   })
 );
 
-// CORS configuration with strict origin enforcement
-const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+// ======================================
+// 2. CORS Configuration
+// ======================================
+
+const configuredOrigins = (process.env.FRONTEND_URL || '')
   .split(',')
-  .map((o) => o.trim())
+  .map(origin => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 const allowedOrigins = [
   ...configuredOrigins,
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174'
 ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // In production, strictly enforce allowed frontend origins
-      if (process.env.NODE_ENV === 'production') {
-        if (!origin || allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-        return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
-      }
-      // Local development fallback
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin, callback) => {
+
+    // Allow requests without an origin
+    if (!origin) {
       return callback(null, true);
-    },
-    credentials: true,
+    }
+
+    // Allow all origins in development
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    // Allow configured origins in production
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(
+      new Error(`CORS blocked origin: ${origin}`)
+    );
+  },
+
+  credentials: true,
+
+  methods: [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS'
+  ],
+
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization'
+  ]
+};
+
+app.use(cors(corsOptions));
+
+// ======================================
+// 3. Body Parser
+// ======================================
+
+app.use(express.json({ limit: '10mb' }));
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: '10mb'
   })
 );
 
-// Parsers
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser(process.env.COOKIE_SECRET || 'cydex_cookie_secret_key'));
+// ======================================
+// 4. Cookie Parser
+// ======================================
+
+app.use(
+  cookieParser(
+    process.env.COOKIE_SECRET || 'cydex_cookie_secret_key'
+  )
+);
+
+// ======================================
+// 5. Morgan Logger
+// ======================================
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Static files for media uploads with proper headers for APK packages
+// ======================================
+// 6. Static Uploads Folder
+// ======================================
+
 const uploadsDir = path.join(__dirname, '../uploads');
+
 app.use(
   '/uploads',
-  express.static(uploadsDir, {
-    setHeaders: (res, pathStr) => {
-      if (pathStr.toLowerCase().endsWith('.apk')) {
-        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        const filename = path.basename(pathStr);
-        let downloadName = 'app-release.apk';
-        if (filename.toLowerCase().includes('campuslink')) {
-          downloadName = 'CampusLink-release.apk';
-        } else if (filename.toLowerCase().includes('baby')) {
-          downloadName = 'BabyShop-release.apk';
-        } else {
-          downloadName = filename;
-        }
-        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
-      }
-    },
-  })
+  express.static(uploadsDir)
 );
 
-// Health check
+// ======================================
+// 7. Basic Health Check
+// ======================================
+
 app.get('/api/v1/health', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Cydex Digital API is healthy and operational',
-    timestamp: new Date().toISOString(),
+    message: 'Cydex Digital API is running',
+    timestamp: new Date().toISOString()
   });
 });
 
-// Mount versioned API routes
+// ======================================
+// 8. MongoDB Connection Middleware
+// ======================================
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('[Database Error]:', error.message);
+
+    res.status(503).json({
+      success: false,
+      message: 'Database connection failed'
+    });
+  }
+});
+
+// ======================================
+// 9. API Routes
+// ======================================
+
 app.use('/api/v1/auth', authRoutes);
+
 app.use('/api/v1/services', serviceRoutes);
+
 app.use('/api/v1/portfolio', portfolioRoutes);
+
 app.use('/api/v1/contact', inquiryRoutes);
+
 app.use('/api/v1/inquiries', inquiryRoutes);
+
 app.use('/api/v1/client-projects', clientProjectRoutes);
+
 app.use('/api/v1/messages', messageRoutes);
+
 app.use('/api/v1/notifications', notificationRoutes);
+
 app.use('/api/v1/blog', blogRoutes);
+
 app.use('/api/v1/testimonials', testimonialRoutes);
+
 app.use('/api/v1/team', teamRoutes);
+
 app.use('/api/v1/media', mediaRoutes);
+
 app.use('/api/v1/settings', settingsRoutes);
+
 app.use('/api/v1/admin', adminRoutes);
 
-// 404 handler for unmatched API routes
-app.use((req, res, next) => {
+// ======================================
+// 10. Not Found Middleware
+// ======================================
+
+app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Endpoint not found: ${req.method} ${req.originalUrl}`,
+    message: `Endpoint not found: ${req.method} ${req.originalUrl}`
   });
 });
 
-// Centralized Error Middleware
+// ======================================
+// 11. Error Handler
+// ======================================
+
 app.use(errorHandler);
+
+// ======================================
+// 12. Export App
+// ======================================
 
 export default app;

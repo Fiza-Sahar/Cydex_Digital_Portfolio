@@ -1,19 +1,31 @@
-import mongoose from 'mongoose';
-import dns from 'dns';
 
-// Fix for Windows Node.js querySrv ECONNREFUSED on MongoDB Atlas SRV records
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch {
-  // Ignore in environments where setting custom DNS servers is disallowed
-}
+import mongoose from 'mongoose';
+
+let connectionPromise;
 
 export const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cydex_digital');
-    console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`[MongoDB] Connection error: ${error.message}`);
-    process.exit(1);
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is missing');
+  }
+
+  if (!connectionPromise) {
+    connectionPromise = mongoose.connect(process.env.MONGODB_URI)
+      .then((connection) => {
+        console.log(
+          `[MongoDB] Connected: ${connection.connection.host}`
+        );
+        return connection.connection;
+      })
+      .catch((error) => {
+        connectionPromise = null;
+        console.error('[MongoDB] Connection failed:', error.message);
+        throw error;
+      });
+  }
+
+  return connectionPromise;
 };
